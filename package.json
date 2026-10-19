@@ -1,0 +1,28 @@
+{
+  "name": "kyc-chain-fyp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cross-institutional KYC deduplication and versioning research prototype",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.js",
+    "test:api": "node --test tests/workflow.test.js",
+    "test:browser": "node --test tests/browser.test.js",
+    "check": "node --check server/index.js && node --check server/service.js && node --check public/app.js",
+    "compile": "node scripts/compile.js"
+  },
+  "dependencies": {
+    "ethers": "6.17.0",
+    "express": "5.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "ganache": "7.9.2",
+    "solc": "0.8.37"
+  }
+}

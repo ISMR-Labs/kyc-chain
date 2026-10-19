@@ -1,0 +1,91 @@
+name: kyc-chain
+services:
+  app:
+    image: kyc-chain:${KYC_RELEASE:-latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: kyc-chain
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 45s
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 4310
+      DATA_DIR: /var/lib/kyc-chain
+      SEED_DEMO: "false"
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set the HTTPS origin}
+      TRUST_PROXY: ${TRUST_PROXY:?Set the reverse proxy IP}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set the initial administrator email}
+      RPC_URL: http://ledger:8545
+    volumes:
+      - ${KYC_DATA_DIR:?Set the absolute private data directory}:/var/lib/kyc-chain
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 1536m
+    cpus: 2.0
+    networks:
+      - proxy
+      - ledger
+    depends_on:
+      - ledger
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+  ledger:
+    image: hyperledger/besu:26.9.0
+    container_name: kyc-ledger
+    user: "1000:1000"
+    restart: unless-stopped
+    stop_grace_period: 60s
+    environment:
+      JAVA_OPTS: -Xms256m -Xmx768m
+    command:
+      - --data-path=/var/lib/besu
+      - --genesis-file=/config/genesis.json
+      - --node-private-key-file=/config/key
+      - --rpc-http-enabled
+      - --rpc-http-host=0.0.0.0
+      - --rpc-http-port=8545
+      - --rpc-http-api=ETH,NET,WEB3,QBFT
+      - --host-allowlist=ledger,localhost,127.0.0.1
+      - --discovery-enabled=false
+      - --min-gas-price=0
+      - --sync-mode=FULL
+      - --data-storage-format=FOREST
+      - --logging=INFO
+    volumes:
+      - ${KYC_LEDGER_DIR:?Set the private ledger directory}/config:/config:ro
+      - ${KYC_LEDGER_DIR:?Set the private ledger directory}/data:/var/lib/besu
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777,exec
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 1536m
+    cpus: 2.0
+    networks:
+      - ledger
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+networks:
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-nginx-proxy-manager_default}
+  ledger:
+    internal: true

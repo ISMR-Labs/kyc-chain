@@ -1,0 +1,8 @@
+{
+  "name": "kyc-contract-build",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "compile": "node scripts/compile.js" },
+  "dependencies": { "ethers": "6.17.0", "solc": "0.8.37" }
+}

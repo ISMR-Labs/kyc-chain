@@ -1,0 +1,11 @@
+node_modules
+data
+data-*
+artifacts
+.git
+.env
+.private
+*.log
+*.zip
+*.tgz
+deploy/runtime

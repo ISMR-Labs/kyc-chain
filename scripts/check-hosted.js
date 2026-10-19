@@ -1,0 +1,48 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import { chromium, expect } from '@playwright/test';
+
+const origin = process.env.CHECK_ORIGIN || 'https://kyc.dilanp.duckdns.org';
+const credentials = fs.readFileSync('.private/deployment-access.txt', 'utf8');
+const email = credentials.match(/Email: (.+)/)[1];
+const password = credentials.match(/Password: (.+)/)[1];
+const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+try {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  const health = await context.request.get(origin + '/api/health');
+  assert.equal(health.status(), 200);
+  assert.equal((await health.json()).status, 'ok');
+  const response = await page.goto(origin);
+  assert.equal(response.status(), 200);
+  assert.ok(response.headers()['strict-transport-security']);
+  await expect(page.getByLabel('Email address')).toHaveValue('');
+  await expect(page.getByLabel('Password', { exact: true })).toHaveValue('');
+  await expect(page.locator('body')).not.toContainText('Demo@12345');
+  await expect(page.locator('body')).not.toContainText('five-minute');
+  await page.screenshot({ path: 'artifacts/screenshots/hosted-login.png', fullPage: true });
+  await page.getByLabel('Email address').fill(email);
+  await page.getByLabel('Password', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Sign in to workspace' }).click();
+  await expect(page.getByRole('heading', { name: 'Secure your account' })).toBeVisible();
+  const cookie = (await context.cookies()).find(c => c.name === 'kyc_session');
+  assert.ok(cookie?.secure && cookie.httpOnly && cookie.sameSite === 'Strict');
+  assert.equal((await context.request.get(origin + '/api/dashboard')).status(), 403);
+  await page.screenshot({ path: 'artifacts/screenshots/hosted-account-setup.png', fullPage: true });
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.getByRole('link', { name: 'Help Center', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Help Center', exact: true })).toBeVisible();
+  await page.screenshot({ path: 'artifacts/screenshots/hosted-help.png', fullPage: true });
+  await page.getByRole('link', { name: 'Training walkthrough', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Run the five-minute demo' })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(origin);
+  await expect(page.getByRole('heading', { name: 'Your identity workspace.' })).toBeVisible();
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  const denied = await context.request.post(origin + '/api/login', { data: { email: 'admin@kyc.demo', password: 'Demo@12345' } });
+  assert.equal(denied.status(), 401);
+  assert.deepEqual(errors, []);
+  console.log('Hosted verification passed: trusted HTTPS, healthy ledger, blank sign-in, secure cookies, first-login password gate, rejected demo account, separate help, mobile layout. Administrator password was not changed.');
+} finally { await browser.close(); }
